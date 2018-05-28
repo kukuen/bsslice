@@ -25,71 +25,86 @@ async function slice({songName, difficulty, startBeat, endBeat = null, repeatCou
     let beatmap = JSON.parse(await fs.readFile(path.join(srcDir, difficultyLevel.jsonPath), 'utf8'))
 
     let bpm = beatmap._beatsPerMinute;
-    let offset = info.offset;
 
     let silenceDuration = silentBeats * 60 / bpm
     let startTime = startBeat * 60 / bpm
     let endTime = endBeat != null ? endBeat * 60 / bpm : null
 
-    console.log(startTime, endTime)
-
-    let newBeatmap = {
+    let baseNewBeatmap = {
         ...beatmap,
         _obstacles: beatmap._obstacles
             .filter(filterByTime(startBeat, endBeat))
-            .map(reduceTime(startBeat - silentBeats))
-        ,
+            .map(addTime(-(startBeat - silentBeats))),
         _events: beatmap._events
             .filter(filterByTime(startBeat, endBeat))
-            .map(reduceTime(startBeat - silentBeats))
-        ,
+            .map(addTime(-(startBeat - silentBeats))),
         _notes: beatmap._notes
             .filter(filterByTime(startBeat, endBeat))
-            .map(reduceTime(startBeat - silentBeats))
+            .map(addTime(-(startBeat - silentBeats)))
         ,
     }
 
-    //console.log(slicedInfo)
-    //console.log(beatmap)
+    let parts = [
+        {
+            duration: silenceDuration
+        },
+        {
+            source: path.join(srcDir, difficultyLevel.audioPath),
+            startTime: startTime,
+            duration: endTime ? endTime - startTime : null
+        }];
+
+
+    let newBeatmap = baseNewBeatmap;
+
+    if (repeatCount > 1) {
+        let loopDuration = silentBeats + endBeat - startBeat;
+
+        for (var i = 1; i < repeatCount; i++) {
+            newBeatmap._obstacles = [
+                ...newBeatmap._obstacles,
+                ...baseNewBeatmap._obstacles.map(addTime(loopDuration * i))
+            ]
+            newBeatmap._events = [
+                ...newBeatmap._events,
+                ...baseNewBeatmap._events.map(addTime(loopDuration * i))
+            ]
+            newBeatmap._notes = [
+                ...newBeatmap._notes,
+                ...baseNewBeatmap._notes.map(addTime(loopDuration * i))
+            ]
+            parts = [
+                ...parts,
+                {
+                    duration: silenceDuration
+                },
+                {
+                    source: path.join(srcDir, difficultyLevel.audioPath),
+                    startTime: startTime,
+                    duration: endTime ? endTime - startTime : null
+                }
+            ]
+        }
+    }
 
     await fs.ensureDir(destDir)
     await fs.writeFile(path.join(destDir, difficultyLevel.jsonPath), JSON.stringify(newBeatmap))
     await fs.writeFile(path.join(destDir, 'info.json'), JSON.stringify(newInfo))
     await concat({
-        parts: [
-            {
-                duration: silenceDuration
-            },
-            {
-                source: path.join(srcDir, difficultyLevel.audioPath),
-                startTime: startTime,
-                duration: endTime ? endTime - startTime : null
-            }],
+        parts: parts,
         output: path.join(destDir, difficultyLevel.audioPath)
     })
 }
 
-function reduceTime(delta) {
-    return e => ({...e, _time: e._time - delta})
+function addTime(delta) {
+    return e => ({...e, _time: e._time + delta})
 }
 
 function filterByTime(startTime, endTime) {
-    return e => e._time >= startTime && (endTime == null || e._time <= endTime)
+    return e => e._time >= startTime && (endTime == null || e._time < endTime)
 }
 
-slice({songName: 'Invader Invader', difficulty: 'Expert', startBeat: 150})
-//
-//concat({
-//    parts: [
-//        {duration: 2},
-//        {
-//            source: path.join(__dirname, '../song.ogg'),
-//            startTime: 30,
-//            duration: 0.1
-//        }
-//    ],
-//    output: path.join(__dirname, '../song2.ogg')
-//});
+slice({songName: 'Invader Invader', difficulty: 'Expert', startBeat: 197, endBeat: 229, repeatCount: 1})
 
 
 async function concat({parts, output}) {
@@ -106,12 +121,13 @@ async function concat({parts, output}) {
                     let res = [];
                     if (p.startTime) res = [...res, '-ss', toFfmpegTime(p.startTime)]
                     if (p.duration) res = [...res, '-t', toFfmpegTime(p.duration)]
-                    return [...res, '-i', p.source]
+
+                    res= [...res, '-i', p.source]
+                    res = [...res, '-af', 'afade=t=in:ss=0:d=1']
+                    return res
                 }
             })
             .value();
-
-        console.log(sources)
 
         let filter = _.range(parts.length).map(i => '[' + i + ']').join(' ')
 
