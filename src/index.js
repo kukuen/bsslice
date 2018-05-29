@@ -3,6 +3,7 @@ import child_process from 'child_process';
 import _ from 'lodash';
 import fs from 'fs-extra';
 import yargs from 'yargs';
+import moment from 'moment'
 
 import TaskDelay from './task-delay'
 
@@ -55,16 +56,21 @@ async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBe
     let taskDelay = new TaskDelay();
     fs.watch(dir, (eventType, filename) => {
         taskDelay.delay(async() => {
-            return slice({songFile, startBeat, endBeat, repeatCount, silentBeats})
+            log('slicing beatmap only');
+            await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: false});
+            log('done');
+            log();
         }, WATCH_UPDATE_DELAY)
-    })
+    });
     taskDelay.delay(async() => {
-        return slice({songFile, startBeat, endBeat, repeatCount, silentBeats})
+        log('slicing beatmap + sound');
+        await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: true});
+        log('done');
+        log();
     }, WATCH_UPDATE_DELAY)
 }
 
-async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, silentBeats = 4}) {
-    console.log('slicing ' + songFile)
+async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, silentBeats = 4, sliceAudio = true}) {
     let difficulty = path.basename(songFile, '.json');
     let srcDir = path.dirname(songFile);
     let songName = path.basename(srcDir)
@@ -85,6 +91,14 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
     let beatmap = JSON.parse(await fs.readFile(songFile, 'utf8'));
 
     let bpm = beatmap._beatsPerMinute;
+    let offsetDuration = (difficultyLevel.offset / 1000) / (60 / bpm)// in beats
+
+    console.log(difficultyLevel.offset, offsetDuration)
+
+    let startBeatWithOffset = startBeat + offsetDuration;
+    let endBeatWithOffset = endBeat != null ? endBeat + offsetDuration : null;
+
+    console.log(startBeat, endBeat)
 
     let silenceDuration = silentBeats * 60 / bpm;
     let startTime = startBeat * 60 / bpm;
@@ -93,13 +107,14 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
     let baseNewBeatmap = {
         ...beatmap,
         _obstacles: beatmap._obstacles
-            .filter(filterByTime(startBeat, endBeat))
+            .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
+            .map(cropObstacle(endBeatWithOffset))
             .map(addTime(-(startBeat - silentBeats))),
         _events: beatmap._events
-            .filter(filterByTime(startBeat, endBeat))
+            .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
             .map(addTime(-(startBeat - silentBeats))),
         _notes: beatmap._notes
-            .filter(filterByTime(startBeat, endBeat))
+            .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
             .map(addTime(-(startBeat - silentBeats)))
 
     };
@@ -150,11 +165,12 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
     await fs.ensureDir(destDir);
     await fs.writeFile(path.join(destDir, difficultyLevel.jsonPath), JSON.stringify(newBeatmap));
     await fs.writeFile(path.join(destDir, 'info.json'), JSON.stringify(newInfo));
-    await concat({
-        parts: parts,
-        output: path.join(destDir, difficultyLevel.audioPath)
-    });
-    console.log('slicing complete' + songFile)
+    if (sliceAudio) {
+        await concat({
+            parts: parts,
+            output: path.join(destDir, difficultyLevel.audioPath)
+        });
+    }
 }
 
 function addTime(delta) {
@@ -163,6 +179,13 @@ function addTime(delta) {
 
 function filterByTime(startTime, endTime) {
     return e => e._time >= startTime && (endTime == null || e._time < endTime);
+}
+
+function cropObstacle(endTime) {
+    return e => ({
+        ...e,
+        _duration: Math.min(e._duration, endTime - e._time)
+    })
 }
 
 async function concat({parts, output}) {
@@ -244,4 +267,8 @@ function toFfmpegTime(secs) {
 
     return s.toString().padStart(2, '0')
         + '.' + ms.toString().padStart(3, '0');
+}
+
+function log(...args) {
+    console.log(`[${moment().format('HH:mm:ss')}]`, ...args)
 }
