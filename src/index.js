@@ -8,7 +8,7 @@ import ON_DEATH from 'death';
 
 import TaskDelay from './task-delay'
 
-const FFMPEG_PATH = path.join(process.cwd(), 'ffmpeg/ffmpeg.exe');
+const FFMPEG_PATH = process.pkg ? path.join(process.execPath, '../ffmpeg/ffmpeg.exe') : path.join(__dirname, '../ffmpeg/ffmpeg.exe');
 const WATCH_UPDATE_DELAY = 100;
 
 let argv = yargs
