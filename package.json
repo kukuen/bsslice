@@ -6,8 +6,9 @@
     "yargs": "^11.0.0"
   },
   "scripts": {
-    "run": "node lib/index.js  -i \"E:\\SteamLibrary\\steamapps\\common\\Beat Saber\\CustomSongs\\Invader Invader2\\Expert.json\" -s 183 -e 186",
+    "run": "node lib/index.js  -i \"E:\\SteamLibrary\\steamapps\\common\\Beat Saber\\CustomSongs\\Invader Invader2\\Expert.json\" -s 183 -e 186 -r 20",
     "build": "babel src --out-dir lib",
+    "build-run": "npm run build & npm run run",
     "pkg": "pkg lib/index.js --targets=node8-win-x64 --output=bsslice.exe"
   },
   "devDependencies": {

@@ -93,16 +93,22 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
     let bpm = beatmap._beatsPerMinute;
     let offsetDuration = (difficultyLevel.offset / 1000) / (60 / bpm)// in beats
 
-    console.log(difficultyLevel.offset, offsetDuration)
-
     let startBeatWithOffset = startBeat + offsetDuration;
     let endBeatWithOffset = endBeat != null ? endBeat + offsetDuration : null;
-
-    console.log(startBeat, endBeat)
 
     let silenceDuration = silentBeats * 60 / bpm;
     let startTime = startBeat * 60 / bpm;
     let endTime = endBeat != null ? endBeat * 60 / bpm : null;
+
+    let baseEvents = _.chain(beatmap._events)
+        .filter(filterByTime(0, startBeatWithOffset))
+        .reduce((initEvents, e) => ({
+            ...initEvents,
+            [e._type]: e._value
+        }), {})
+        .toPairs()
+        .map(([type, value]) => ({_time: 0, _type: parseInt(type), _value: value}))
+        .value();
 
     let baseNewBeatmap = {
         ...beatmap,
@@ -110,9 +116,12 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
             .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
             .map(cropObstacle(endBeatWithOffset))
             .map(addTime(-(startBeat - silentBeats))),
-        _events: beatmap._events
-            .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
-            .map(addTime(-(startBeat - silentBeats))),
+        _events: [
+            ...baseEvents.map(addTime(silentBeats / 2 + offsetDuration)),
+            ...beatmap._events
+                .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
+                .map(addTime(-(startBeat - silentBeats)))
+        ],
         _notes: beatmap._notes
             .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
             .map(addTime(-(startBeat - silentBeats)))
@@ -131,7 +140,7 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
             duration: endTime ? endTime - startTime + silenceDuration : null
         }];
 
-    let newBeatmap = baseNewBeatmap;
+    let newBeatmap = {...baseNewBeatmap};
 
     if (repeatCount > 1) {
         let loopDuration = silentBeats + endBeat - startBeat;
