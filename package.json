@@ -1,21 +1,19 @@
 {
   "dependencies": {
-    "audio": "https://github.com/audiojs/audio",
-    "audio-decode": "https://github.com/audiojs/audio-decode",
-    "audio-loader": "^1.0.3",
-    "babel-cli": "^6.26.0",
-    "babel-plugin-transform-object-rest-spread": "^6.26.0",
-    "fluent-ffmpeg": "^2.1.2",
     "fs-extra": "^6.0.1",
     "lodash": "^4.17.10",
-    "ogg": "^1.2.5",
-    "stream-buffers": "^3.0.2",
-    "vorbis.js": "https://github.com/audiocogs/vorbis.js"
+    "yargs": "^11.0.0"
   },
   "scripts": {
-    "run": "babel-node src/index.js"
+    "run": "babel-node src/index.js  -i \"E:\\SteamLibrary\\steamapps\\common\\Beat Saber\\CustomSongs\\Invader Invader\\Expert.json\" -s 197 -e 229",
+    "build": "babel src --out-dir lib",
+    "pkg": "pkg lib/index.js --targets=node8-win-x64 --output=bsslice.exe"
   },
   "devDependencies": {
-    "babel-preset-env": "^1.7.0"
+    "pkg": "^4.3.1",
+    "babel-preset-env": "^1.7.0",
+    "babel": "^6.23.0",
+    "babel-cli": "^6.26.0",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0"
   }
 }

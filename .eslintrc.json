@@ -1,0 +1,14 @@
+{
+  "extends": [
+    "semistandard",
+    "plugin:react/recommended"
+  ],
+  "parser": "babel-eslint",
+  "parserOptions": {
+    "ecmaVersion": 7,
+    "ecmaFeatures": {
+      "experimentalObjectRestSpread": true,
+      "experimentalDecorators": true
+    }
+  }
+}
