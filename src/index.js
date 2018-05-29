@@ -109,35 +109,46 @@ slice({songName: 'Invader Invader', difficulty: 'Expert', startBeat: 197, endBea
 
 async function concat({parts, output}) {
     return new Promise((resolve, reject) => {
+        let filters = []
+        let filtersParts = []
         let sources = _.chain(parts)
-            .flatMap(p => {
+            .flatMap((p, i) => {
                 if (p.source == null) {
+                    filtersParts.push('[' + i + ']')
                     return [
                         '-f', 'lavfi',
                         '-t', toFfmpegTime(p.duration),
                         '-i', 'anullsrc=channel_layout=stereo:sample_rate=44000'
                     ]
                 } else {
+                    filters.push('[' + i + ']afade=t=in:st=0:d=1[a' + i + ']')
+                    filtersParts.push('[a' + i + ']')
                     let res = [];
+
                     if (p.startTime) res = [...res, '-ss', toFfmpegTime(p.startTime)]
                     if (p.duration) res = [...res, '-t', toFfmpegTime(p.duration)]
 
-                    res= [...res, '-i', p.source]
-                    res = [...res, '-af', 'afade=t=in:ss=0:d=1']
+                    res = [...res, '-i', p.source]
+
                     return res
                 }
             })
             .value();
 
-        let filter = _.range(parts.length).map(i => '[' + i + ']').join(' ')
+        console.log(sources)
+        console.log(filters)
+        console.log(filtersParts)
+
+        let filtersStr = filters.join('; ')+';'
+        let filtersPartsStr = filtersParts.join(' ')
 
         let args = [
             ...sources,
-            '-filter_complex', filter + ' concat=n=' + parts.length + ':v=0:a=1 ',
+            '-filter_complex', filtersStr + ' ' + filtersPartsStr + ' concat=n=' + parts.length + ':v=0:a=1 ',
             '-y',
             output];
 
-        let concat = child_process.spawn(path.join(__dirname, '../ffmpeg/ffmpeg.exe'), args);
+        let concat = child_process.spawn(path.join(__dirname, '../ffmpeg/ffmpeg.exe'), args, {stdio: 'inherit'});
 
         concat.on('close', code => {
             if (code === 0) resolve()
