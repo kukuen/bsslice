@@ -75,7 +75,7 @@ async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBe
 
     let closing = false;
     ON_DEATH((signal, err) => {
-        if(closing) return;
+        if (closing) return;
         closing = true;
         watcher.close();
         taskDelay.delay(async () => {
@@ -128,8 +128,8 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
     let baseNewBeatmap = {
         ...beatmap,
         _obstacles: beatmap._obstacles
-            .filter(filterByTime(startBeatWithOffset, endBeatWithOffset))
-            .map(cropObstacle(endBeatWithOffset))
+            .filter(filterObstacleByTime(startBeatWithOffset, endBeatWithOffset))
+            .map(cropObstacle(startBeatWithOffset, endBeatWithOffset))
             .map(addTime(-(startBeat - silentBeats))),
         _events: [
             ...baseEvents.map(addTime(silentBeats / 2 + offsetDuration)),
@@ -201,15 +201,24 @@ function addTime(delta) {
     return e => ({...e, _time: e._time + delta});
 }
 
+function filterObstacleByTime(startTime, endTime) {
+    return e => e._time + e._duration >= startTime && (endTime == null || e._time < endTime);
+}
+
 function filterByTime(startTime, endTime) {
     return e => e._time >= startTime && (endTime == null || e._time < endTime);
 }
 
-function cropObstacle(endTime) {
-    return e => ({
-        ...e,
-        _duration: Math.min(e._duration, endTime - e._time)
-    })
+function cropObstacle(startTime, endTime) {
+    return e => {
+        let newStartTime = Math.max(e._time, startTime);
+        let newEndTime = endTime ? Math.min(e._time + e._duration, endTime) : e._time + e._duration;
+        return {
+            ...e,
+            _time: newStartTime,
+            _duration: newEndTime - newStartTime
+        }
+    }
 }
 
 async function concat({parts, output}) {
