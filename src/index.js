@@ -52,12 +52,13 @@ watchSlice({
 })
     .catch(err => console.error(err));
 
+
 async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBeats }) {
     let srcDir = path.dirname(songFile);
     let songName = path.basename(srcDir)
     let destDir = path.join(path.dirname(srcDir), '(sliced) ' + songName);
     let taskDelay = new TaskDelay();
-    fs.watch(srcDir, (eventType, filename) => {
+    let watcher = fs.watch(srcDir, (eventType, filename) => {
         taskDelay.delay(async() => {
             log('slicing beatmap only');
             await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: false});
@@ -72,7 +73,11 @@ async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBe
         log();
     }, WATCH_UPDATE_DELAY);
 
+    let closing = false;
     ON_DEATH((signal, err) => {
+        if(closing) return;
+        closing = true;
+        watcher.close();
         taskDelay.delay(async () => {
             log('cleaning ' + destDir);
             await fs.remove(destDir);
