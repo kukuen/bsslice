@@ -57,24 +57,40 @@ async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBe
     let srcDir = path.dirname(songFile);
     let songName = path.basename(srcDir)
     let destDir = path.join(path.dirname(srcDir), '(sliced) ' + songName);
+
+    await fs.emptyDir(destDir);
+
     let taskDelay = new TaskDelay();
     let watcher = fs.watch(srcDir, (eventType, filename) => {
         taskDelay.delay(async() => {
-            log('slicing beatmap only');
-            await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: false});
-            log('done');
-            log();
+            try {
+                log('slicing beatmap only');
+                await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: false});
+                log('done');
+                log();
+            } catch (e) {
+                logError(e)
+                close();
+            }
         }, WATCH_UPDATE_DELAY);
     });
     taskDelay.delay(async() => {
-        log('slicing beatmap + sound');
-        await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: true});
-        log('done');
-        log();
+        try {
+            log('slicing beatmap + sound');
+            await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: true});
+            log('done');
+            log();
+        } catch (e) {
+            logError(e)
+            close();
+        }
     }, WATCH_UPDATE_DELAY);
 
+    ON_DEATH((signal, err) => close())
+
     let closing = false;
-    ON_DEATH((signal, err) => {
+
+    function close() {
         if (closing) return;
         closing = true;
         watcher.close();
@@ -82,7 +98,7 @@ async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBe
             log('cleaning ' + destDir);
             await fs.remove(destDir);
         })
-    })
+    }
 }
 
 async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, silentBeats = 4, sliceAudio = true}) {
@@ -106,7 +122,11 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
     let beatmap = JSON.parse(await fs.readFile(songFile, 'utf8'));
 
     let bpm = beatmap._beatsPerMinute;
-    let offsetDuration = (difficultyLevel.offset / 1000) / (60 / bpm)// in beats
+
+    // because the offset is saved inside the time, we need to filter the notes a little earlier
+    // to make sure that the first beat is kept
+    let floatCorrection = 0.01;
+    let offsetDuration = (difficultyLevel.offset / 1000) / (60 / bpm) - floatCorrection;
 
     let startBeatWithOffset = startBeat + offsetDuration;
     let endBeatWithOffset = endBeat != null ? endBeat + offsetDuration : null;
@@ -281,7 +301,7 @@ async function concat({parts, output}) {
             '-y',
             output];
 
-        let concat = child_process.spawn(FFMPEG_PATH, args);
+        let concat = child_process.spawn(FFMPEG_PATH, args, {stdio: 'ignore'});
 
         concat.on('close', code => {
             if (code === 0) {
@@ -304,4 +324,8 @@ function toFfmpegTime(secs) {
 
 function log(...args) {
     console.log(`[${moment().format('HH:mm:ss')}]`, ...args)
+}
+
+function logError(...args) {
+    console.error(`[${moment().format('HH:mm:ss')}]`, ...args)
 }
