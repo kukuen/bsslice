@@ -2,57 +2,69 @@ import path from 'path';
 import child_process from 'child_process';
 import _ from 'lodash';
 import fs from 'fs-extra';
-//import yargs from 'yargs';
+import yargs from 'yargs';
+
+import TaskDelay from './task-delay'
 
 const FFMPEG_PATH = path.join(process.cwd(), 'ffmpeg/ffmpeg.exe');
-//
-//let argv = yargs
-//    .option('i', {
-//        alias: 'input',
-//        demandOption: true,
-//        describe: 'path to the difficulty .json file',
-//        type: 'string'
-//    })
-//    .option('s', {
-//        alias: 'start',
-//        demandOption: true,
-//        describe: 'beat to start the slice at',
-//        type: 'number'
-//    })
-//    .option('e', {
-//        alias: 'end',
-//        describe: 'beat to end the slice at',
-//        default: null,
-//        type: 'number'
-//    })
-//    .option('r', {
-//        alias: 'repeat',
-//        describe: 'repeat the slice [n] times',
-//        default: 1,
-//        type: 'number'
-//    })
-//    .option('silence', {
-//        describe: 'add [n] empty beats before each slice',
-//        default: 4,
-//        type: 'number'
-//    })
-//    .argv
+const WATCH_UPDATE_DELAY = 100;
 
-console.log(argv)
+let argv = yargs
+    .option('i', {
+        alias: 'input',
+        demandOption: true,
+        describe: 'path to the difficulty .json file',
+        type: 'string'
+    })
+    .option('s', {
+        alias: 'start',
+        demandOption: true,
+        describe: 'beat to start the slice at',
+        type: 'number'
+    })
+    .option('e', {
+        alias: 'end',
+        describe: 'beat to end the slice at',
+        default: null,
+        type: 'number'
+    })
+    .option('r', {
+        alias: 'repeat',
+        describe: 'repeat the slice [n] times (require --end option)',
+        default: 1,
+        type: 'number'
+    })
+    .option('silence', {
+        describe: 'add [n] empty beats before each slice',
+        default: 4,
+        type: 'number'
+    })
+    .argv;
 
-console.log(process.cwd());
-
-slice({
+watchSlice({
     songFile: argv.input,
     startBeat: argv.start,
     endBeat: argv.end,
     repeatCount: argv.repeat,
     silentBeats: argv.silence
 })
-    .then(() => console.log('complete'))
     .catch(err => console.error(err));
 
+async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBeats }) {
+    let dir = path.dirname(songFile);
+    let taskDelay = new TaskDelay();
+    fs.watch(dir, (eventType, filename) => {
+        taskDelay.delay(async() => {
+            return slice({songFile, startBeat, endBeat, repeatCount, silentBeats})
+        }, WATCH_UPDATE_DELAY)
+    })
+    taskDelay.delay(async() => {
+        return slice({songFile, startBeat, endBeat, repeatCount, silentBeats})
+    }, WATCH_UPDATE_DELAY)
+}
+
 async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, silentBeats = 4}) {
+    console.log('slicing ' + songFile)
     let difficulty = path.basename(songFile, '.json');
     let srcDir = path.dirname(songFile);
     let songName = path.basename(srcDir)
@@ -142,6 +154,7 @@ async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, sile
         parts: parts,
         output: path.join(destDir, difficultyLevel.audioPath)
     });
+    console.log('slicing complete' + songFile)
 }
 
 function addTime(delta) {
@@ -231,29 +244,4 @@ function toFfmpegTime(secs) {
 
     return s.toString().padStart(2, '0')
         + '.' + ms.toString().padStart(3, '0');
-}
-
-function getFormat(file) {
-
-    return new Promise((resolve, reject) => {
-        let decoder = child_process.spawn(path.join(__dirname, '../ffmpeg/ffprobe.exe'), [
-            '-print_format', 'json',
-            '-show_format',
-            '-show_streams',
-            file
-        ]);
-
-        let str = '';
-
-        decoder.stdout.on('data', d => str += d);
-        decoder.on('close', code => {
-            if (code === 0) {
-                resolve(JSON.parse(str));
-            }
-            else {
-                reject(new Error('ffprobe error code ' + code));
-            }
-        });
-    });
-
 }
