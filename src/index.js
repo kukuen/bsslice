@@ -4,6 +4,7 @@ import _ from 'lodash';
 import fs from 'fs-extra';
 import yargs from 'yargs';
 import moment from 'moment'
+import ON_DEATH from 'death';
 
 import TaskDelay from './task-delay'
 
@@ -52,22 +53,31 @@ watchSlice({
     .catch(err => console.error(err));
 
 async function watchSlice({songFile, startBeat, endBeat , repeatCount , silentBeats }) {
-    let dir = path.dirname(songFile);
+    let srcDir = path.dirname(songFile);
+    let songName = path.basename(srcDir)
+    let destDir = path.join(path.dirname(srcDir), '(sliced) ' + songName);
     let taskDelay = new TaskDelay();
-    fs.watch(dir, (eventType, filename) => {
+    fs.watch(srcDir, (eventType, filename) => {
         taskDelay.delay(async() => {
             log('slicing beatmap only');
             await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: false});
             log('done');
             log();
-        }, WATCH_UPDATE_DELAY)
+        }, WATCH_UPDATE_DELAY);
     });
     taskDelay.delay(async() => {
         log('slicing beatmap + sound');
         await slice({songFile, startBeat, endBeat, repeatCount, silentBeats, sliceAudio: true});
         log('done');
         log();
-    }, WATCH_UPDATE_DELAY)
+    }, WATCH_UPDATE_DELAY);
+
+    ON_DEATH((signal, err) => {
+        taskDelay.delay(async () => {
+            log('cleaning ' + destDir);
+            await fs.remove(destDir);
+        })
+    })
 }
 
 async function slice({songFile, startBeat, endBeat = null, repeatCount = 1, silentBeats = 4, sliceAudio = true}) {

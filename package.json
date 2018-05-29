@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "death": "^1.1.0",
     "fs-extra": "^6.0.1",
     "lodash": "^4.17.10",
     "moment": "^2.22.1",
